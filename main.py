@@ -11,7 +11,7 @@ st.sidebar.title("🔒 セキュリティ")
 password = st.sidebar.text_input("合言葉を入力してください", type="password")
 
 # 合言葉が「sns2026」じゃない場合は、ここで画面を止める！
-if password != "Gakucycle0222":  # ← ここを団体専用の好きな合言葉に変えてください
+if password != st.secrets["app_password"]:  # ← ここを団体専用の好きな合言葉に変えてください
     st.title("📱 SNS進捗トラッカー")
     st.warning("👈 左のメニューから合言葉を入力してください。（※運営メンバー専用です）")
     st.stop()  # 💡ここでプログラムの実行を完全にストップし、下の画面を見せません！
