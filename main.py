@@ -5,21 +5,20 @@ import json
 st.set_page_config(page_title="SNS進捗トラッカー", layout="centered")
 
 # ==========================================
-# 🔒 ここから：内輪専用の「合言葉ロック」機能
+# 「合言葉ロック」機能
 # ==========================================
 st.sidebar.title("🔒 セキュリティ")
 password = st.sidebar.text_input("合言葉を入力してください", type="password")
 
-# 合言葉が「sns2026」じゃない場合は、ここで画面を止める！
-if password != st.secrets["app_password"]:  # ← ここを団体専用の好きな合言葉に変えてください
+if password != st.secrets["app_password"]:
     st.title("📱 SNS進捗トラッカー")
     st.warning("👈 左のメニューから合言葉を入力してください。（※運営メンバー専用です）")
     st.stop()  # 💡ここでプログラムの実行を完全にストップし、下の画面を見せません！
 # ==========================================
-# 🔓 ここまで：合言葉が合っていれば、下の画面が表示される
+# 合言葉が合っていれば、下の画面が表示される
 # ==========================================
 
-GAS_URL = "https://script.google.com/macros/s/AKfycbw9qhfsKFJU3jMuwrV43KmXgGjt8WgF5WYGbQnQ34Api0Wrdmak3RtifkBjvct7m7TJ/exec" # ここを忘れずに！
+GAS_URL = "https://script.google.com/macros/s/AKfycbzAta0ND9DduFmx2STcBPANdm8hD2itXjIQTSngBs47th8CwOD1FuBV12wsdc4HIHUb/exec" # ここを忘れずに！
 
 st.title("SNS進捗トラッカー")
 st.write("最新の進捗を読み込んで更新できます。")
