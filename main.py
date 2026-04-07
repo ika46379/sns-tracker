@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import json
 import datetime
+import pandas as pd  # 🌟 表を表示するために追加！
 
 st.set_page_config(page_title="進捗報告フォーム", layout="centered")
 
@@ -18,12 +19,12 @@ except:
 
 if password != correct_password: 
     st.title("進捗報告フォーム")
-    st.warning("👈 左のメニューから合言葉を入力してください。（ローカルテスト時は test と入力）")
+    st.warning("👈 左のメニューから合言葉を入力してください。")
     st.stop()
 # ==========================================
 
 # ▼新しいGASのURLを貼り付け！
-GAS_URL = "https://script.google.com/macros/s/AKfycbzPmwOZX06KaIM71rEXuuLssiBS5g7e9QEpFdA6kx6y2wWXHn6akGWIUIsPmdnJSEY0/exec"
+GAS_URL = "https://script.google.com/macros/s/AKfycbxD6CZSRwagL7NRbdWv6HcZN__14PZo7BgEgA3h0FTi3DLdR3MlbCfv8od-TfX8cO_8/exec"
 
 st.title("進捗報告フォーム")
 
@@ -37,20 +38,52 @@ st.write("---")
 if selected_sheet == "Instagram_通常投稿":
     st.write(f"【{selected_sheet}】の進捗管理画面です。")
 
-    # セッション情報のキーにシート名を混ぜる（シートごとにデータを分けるため）
-    list_key = f"existing_ids_{selected_sheet}"
-    
-    # 通し番号の取得（GASにシート名も一緒に送る！）
-    if list_key not in st.session_state:
+    # ==========================================
+    # 🌟 ここが抜けていた部分です！GASから表のデータ(all_data)を取得する
+    # ==========================================
+    all_data_key = f"all_data_{selected_sheet}"
+    if all_data_key not in st.session_state:
         with st.spinner(f'{selected_sheet} のデータを読み込み中...'):
             try:
-                res = requests.get(GAS_URL, params={"action": "get_ids", "sheet_name": selected_sheet})
-                st.session_state[list_key] = res.json()
+                res = requests.get(GAS_URL, params={"action": "get_all", "sheet_name": selected_sheet})
+                st.session_state[all_data_key] = res.json()
             except:
-                st.session_state[list_key] = []
+                st.session_state[all_data_key] = []
+                
+    all_data = st.session_state[all_data_key]
 
-    post_ids = ["未選択", "✨ 新規追加 (新しい通し番号を作成)"] + st.session_state[list_key]
-    selected_id_option = st.selectbox("どの投稿を編集・追加しますか？ (A列)", post_ids)
+    # ==========================================
+    # 🌟 追加：データがあれば、綺麗な表（DataFrame）にして画面に表示する！
+    # ==========================================
+    if len(all_data) > 0:
+        st.subheader("📋 現在の投稿一覧")
+        df = pd.DataFrame(all_data)
+        # 列の名前を分かりやすい日本語にする
+        df = df.rename(columns={"id": "通し番号", "name": "担当者", "title": "タイトル案", "purpose": "投稿目的"})
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.info("現在登録されているデータはありません。（新規追加から始められます）")
+        
+    st.write("---")
+
+    # ==========================================
+    # 🌟 表のデータ (all_data) から選択肢を作る
+    # ==========================================
+    options = ["未選択", "✨ 新規追加 (新しい通し番号を作成)"]
+    for row in all_data:
+        # 例：「1: 夏祭りキャンペーン (いちか)」という分かりやすい選択肢を作る
+        # ※もし担当者が空欄だった場合は「未記入」と表示する安全対策付き
+        options.append(f"{row['id']}: {row['title']} ({row.get('name', '未記入')})")
+        
+    selected_option = st.selectbox("どの投稿を編集・追加しますか？", options)
+
+    # 選ばれた文字列から「ID（通し番号）」だけを取り出す
+    if selected_option == "未選択":
+        selected_id_option = "未選択"
+    elif selected_option.startswith("✨ 新規追加"):
+        selected_id_option = "✨ 新規追加 (新しい通し番号を作成)"
+    else:
+        selected_id_option = selected_option.split(":")[0] # コロンより前の番号だけ取得
 
     if selected_id_option != "未選択":
         is_new = selected_id_option.startswith("✨ 新規追加")
@@ -69,20 +102,20 @@ if selected_sheet == "Instagram_通常投稿":
                         st.session_state[data_key] = {}
             current_data = st.session_state[data_key]
 
-        def get_default(key, options, default_val):
+        def get_default(key, default_options, default_val):
             val = current_data.get(key, default_val)
-            return options.index(val) if val in options else 0
+            return default_options.index(val) if val in default_options else 0
 
         st.subheader("1. 基本情報")
-        # members = ["未選択", "いちか", "ぐっさん", "みひろ", "ちはるん"]
-        # selected_name = st.selectbox("担当者名 (B列)", members, index=get_default("name", members, "未選択"))
-        # 複数選べるmultiselectに変更！
-        selected_names = st.multiselect("担当者を選択（複数選択可）", ["未定", "いちか", "ぐっさん", "みひろ", "ちはるん"])
+        # 複数選べるmultiselect
+        members = ["未定", "近藤衣千花", "山口悠己", "中田光優", "中西挑遥"]
+        saved_names_str = current_data.get("name", "") # スプシに保存されている文字を取得
+        saved_names_list = saved_names_str.split("、") if saved_names_str else [] # 「、」で切り分けてリストに戻す
+        default_names = [n for n in saved_names_list if n in members] # エラー防止用チェック
+        
+        selected_names = st.multiselect("担当者を選択 (B列)", members, default=default_names)
+        name = "、".join(selected_names)
 
-        # 選んだ名前のリストを「、」でくっつけて1つの文字にする
-        name = "、".join(selected_names) 
-
-        # タイトル案        
         title_input = st.text_input("タイトル案 (C列)", value=current_data.get("title", ""))
         
         # 📅 日付入力をカレンダーに！
@@ -129,7 +162,7 @@ if selected_sheet == "Instagram_通常投稿":
         if st.button("🚀 提出してスプレッドシートを更新！"):
             with st.spinner('更新中...'):
                 payload = {
-                    "sheet_name": selected_sheet, # 🌟 送信データに「シート名」を追加！
+                    "sheet_name": selected_sheet, 
                     "id": "新規追加" if is_new else selected_id_option,
                     "name": name, "title": title_input, "date": post_date,
                     "purpose": purpose_input, "target": selected_target,
@@ -141,14 +174,241 @@ if selected_sheet == "Instagram_通常投稿":
                 
                 requests.post(GAS_URL, data=json.dumps(payload))
                 
-                if list_key in st.session_state:
-                    del st.session_state[list_key]
+                # 提出後にキャッシュを消して、次に画面を見た時に最新の表が出るようにする
+                if all_data_key in st.session_state:
+                    del st.session_state[all_data_key]
                 if not is_new and data_key in st.session_state:
                     del st.session_state[data_key]
                     
-                st.success("スプレッドシートを更新しました！リロードするとリストに新しい番号が反映されます！🎉")
+                st.success("スプレッドシートを更新しました！リロードすると表とリストに新しい情報が反映されます！🎉")
 
 # Instagram_通常投稿 以外の媒体が選ばれた場合の処理
+# ==========================================
+# 🌟 【追加1】Instagram_ストーリー の画面
+# ==========================================
+elif selected_sheet == "Instagram_ストーリー":
+    st.write(f"【{selected_sheet}】の進捗管理画面です。")
+
+    all_data_key = f"all_data_{selected_sheet}"
+    if all_data_key not in st.session_state:
+        with st.spinner(f'{selected_sheet} のデータを読み込み中...'):
+            try:
+                res = requests.get(GAS_URL, params={"action": "get_all", "sheet_name": selected_sheet})
+                st.session_state[all_data_key] = res.json()
+            except:
+                st.session_state[all_data_key] = []
+                
+    all_data = st.session_state[all_data_key]
+
+    if len(all_data) > 0:
+        st.subheader("📋 現在のストーリー一覧")
+        df = pd.DataFrame(all_data)
+        # 💡 GASはC列を"title"、E列を"purpose"として送ってくるので、ここで綺麗にリネーム！
+        df = df.rename(columns={"id": "通し番号", "name": "担当者", "title": "投稿予定日", "purpose": "投稿完了"})
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.info("現在登録されているデータはありません。")
+        
+    st.write("---")
+
+    options = ["未選択", "✨ 新規追加 (新しい通し番号を作成)"]
+    for row in all_data:
+        options.append(f"{row['id']}: {row['title']} ({row.get('name', '未記入')})")
+        
+    selected_option = st.selectbox("どの投稿を編集・追加しますか？", options, key="story_select")
+
+    if selected_option == "未選択":
+        selected_id_option = "未選択"
+    elif selected_option.startswith("✨ 新規追加"):
+        selected_id_option = "✨ 新規追加 (新しい通し番号を作成)"
+    else:
+        selected_id_option = selected_option.split(":")[0]
+
+    if selected_id_option != "未選択":
+        is_new = selected_id_option.startswith("✨ 新規追加")
+        data_key = f"data_{selected_sheet}_{selected_id_option}"
+        
+        if is_new:
+            current_data = {}
+        else:
+            if data_key not in st.session_state:
+                with st.spinner('データを読み込み中...'):
+                    try:
+                        res = requests.get(GAS_URL, params={"action": "get_data", "id": selected_id_option, "sheet_name": selected_sheet})
+                        st.session_state[data_key] = res.json()
+                    except:
+                        st.session_state[data_key] = {}
+            current_data = st.session_state[data_key]
+
+        st.subheader("1. 投稿情報")
+        # B列: 担当者
+        members = ["未定", "近藤衣千花", "山口悠己", "中田光優", "中西挑遥"]
+        saved_names_str = current_data.get("name", "")
+        saved_names_list = saved_names_str.split("、") if saved_names_str else []
+        default_names = [n for n in saved_names_list if n in members]
+        
+        selected_names = st.multiselect("担当者を選択 (B列)", members, default=default_names, key="story_names")
+        name = "、".join(selected_names)
+        # C列: 投稿予定日 (GASから 'title' という名前で来る箱に入れます)
+        date_val = current_data.get("title", str(datetime.date.today()))
+        try:
+            parsed_date = datetime.datetime.strptime(date_val[:10], "%Y-%m-%d").date()
+        except:
+            parsed_date = datetime.date.today()
+        post_date = st.date_input("投稿予定日 (C列)", value=parsed_date, key="story_date")
+        
+        # D列: 投稿内容 (GASから 'date' という名前で来る箱に入れます)
+        content_input = st.text_area("投稿内容 (D列)", value=current_data.get("date", ""), key="story_content")
+        
+        st.write("---")
+        st.subheader("2. 完了確認とコメント")
+        
+        # E列: 投稿完了 (GASから 'purpose' という名前で来る箱に入れます)
+        status_options = ["未対応", "対応済"]
+        def get_default(key, default_options, default_val):
+            val = current_data.get(key, default_val)
+            return default_options.index(val) if val in default_options else 0
+            
+        is_completed = st.selectbox("投稿完了 (E列)", status_options, index=get_default("purpose", status_options, "未対応"), key="story_comp")
+        
+        # F列: コメント (GASから 'target' という名前で来る箱に入れます)
+        comment = st.text_area("コメント (F列)", value=current_data.get("target", ""), key="story_comment")
+
+        if st.button("🚀 提出してスプレッドシートを更新！", key="story_submit"):
+            with st.spinner('更新中...'):
+                payload = {
+                    "sheet_name": selected_sheet, 
+                    "id": "新規追加" if is_new else selected_id_option,
+                    "name": name,                  # B列へ
+                    "title": str(post_date),       # C列へ
+                    "date": content_input,         # D列へ
+                    "purpose": is_completed,       # E列へ
+                    "target": comment              # F列へ
+                }
+                requests.post(GAS_URL, data=json.dumps(payload))
+                
+                if all_data_key in st.session_state: del st.session_state[all_data_key]
+                if not is_new and data_key in st.session_state: del st.session_state[data_key]
+                st.success("スプレッドシートを更新しました！リロードすると表に反映されます！🎉")
+
+
+# ==========================================
+# 🌟 【追加2】note の画面
+# ==========================================
+elif selected_sheet == "note":
+    st.write(f"【{selected_sheet}】の進捗管理画面です。")
+
+    all_data_key = f"all_data_{selected_sheet}"
+    if all_data_key not in st.session_state:
+        with st.spinner(f'{selected_sheet} のデータを読み込み中...'):
+            try:
+                res = requests.get(GAS_URL, params={"action": "get_all", "sheet_name": selected_sheet})
+                st.session_state[all_data_key] = res.json()
+            except:
+                st.session_state[all_data_key] = []
+                
+    all_data = st.session_state[all_data_key]
+
+    if len(all_data) > 0:
+        st.subheader("📋 現在のnote一覧")
+        df = pd.DataFrame(all_data)
+        # 💡 noteでは C列が"title"、E列が"purpose"なのでそのまま綺麗にリネーム！
+        df = df.rename(columns={"id": "通し番号", "name": "担当者", "title": "タイトル案", "purpose": "投稿目的"})
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.info("現在登録されているデータはありません。")
+        
+    st.write("---")
+
+    options = ["未選択", "✨ 新規追加 (新しい通し番号を作成)"]
+    for row in all_data:
+        options.append(f"{row['id']}: {row['title']} ({row.get('name', '未記入')})")
+        
+    selected_option = st.selectbox("どの投稿を編集・追加しますか？", options, key="note_select")
+
+    if selected_option == "未選択":
+        selected_id_option = "未選択"
+    elif selected_option.startswith("✨ 新規追加"):
+        selected_id_option = "✨ 新規追加 (新しい通し番号を作成)"
+    else:
+        selected_id_option = selected_option.split(":")[0]
+
+    if selected_id_option != "未選択":
+        is_new = selected_id_option.startswith("✨ 新規追加")
+        data_key = f"data_{selected_sheet}_{selected_id_option}"
+        
+        if is_new:
+            current_data = {}
+        else:
+            if data_key not in st.session_state:
+                with st.spinner('データを読み込み中...'):
+                    try:
+                        res = requests.get(GAS_URL, params={"action": "get_data", "id": selected_id_option, "sheet_name": selected_sheet})
+                        st.session_state[data_key] = res.json()
+                    except:
+                        st.session_state[data_key] = {}
+            current_data = st.session_state[data_key]
+
+        st.subheader("1. 基本情報")
+        # B列: 担当者
+        # B列: 担当者（履歴復元機能付き！）
+        members = ["未定", "近藤衣千花", "山口悠己", "中田光優", "中西挑遥"]
+        saved_names_str = current_data.get("name", "")
+        saved_names_list = saved_names_str.split("、") if saved_names_str else []
+        default_names = [n for n in saved_names_list if n in members]
+        
+        selected_names = st.multiselect("担当者を選択 (B列)", members, default=default_names, key="note_names")
+        name = "、".join(selected_names)
+
+        # C列: タイトル案
+        title_input = st.text_input("タイトル案 (C列)", value=current_data.get("title", ""), key="note_title")
+        
+        # D列: 投稿予定日
+        date_val = current_data.get("date", str(datetime.date.today()))
+        try:
+            parsed_date = datetime.datetime.strptime(date_val[:10], "%Y-%m-%d").date()
+        except:
+            parsed_date = datetime.date.today()
+        post_date = st.date_input("投稿予定日 (D列)", value=parsed_date, key="note_date")
+        
+        # E列: 投稿目的
+        purpose_input = st.text_area("投稿目的 (E列)", value=current_data.get("purpose", ""), key="note_purpose")
+
+        st.write("---")
+        st.subheader("2. 進捗状況とコメント")
+        
+        # F列: 進捗状況 (GASから 'target' という名前で来る箱に入れます)
+        status_options = ["未着手", "執筆中", "確認待ち", "完了"]
+        def get_default(key, default_options, default_val):
+            val = current_data.get(key, default_val)
+            return default_options.index(val) if val in default_options else 0
+            
+        progress_status = st.selectbox("進捗状況 (F列)", status_options, index=get_default("target", status_options, "未着手"), key="note_prog")
+        
+        # G列: コメント (GASから 'design' という名前で来る箱に入れます)
+        comment = st.text_area("コメント (G列)", value=current_data.get("design", ""), key="note_comment")
+
+        if st.button("🚀 提出してスプレッドシートを更新！", key="note_submit"):
+            with st.spinner('更新中...'):
+                payload = {
+                    "sheet_name": selected_sheet, 
+                    "id": "新規追加" if is_new else selected_id_option,
+                    "name": name,                  # B列へ
+                    "title": title_input,          # C列へ
+                    "date": str(post_date),        # D列へ
+                    "purpose": purpose_input,      # E列へ
+                    "target": progress_status,     # F列へ
+                    "design": comment              # G列へ
+                }
+                requests.post(GAS_URL, data=json.dumps(payload))
+                
+                if all_data_key in st.session_state: del st.session_state[all_data_key]
+                if not is_new and data_key in st.session_state: del st.session_state[data_key]
+                st.success("スプレッドシートを更新しました！リロードすると表に反映されます！🎉")
+
+
+# ==========================================
+# 🚧 その他の準備中シート
+# ==========================================
 else:
     st.info(f"🚧 「{selected_sheet}」の入力項目は現在準備中です！")
-    st.write("今後、項目が決まり次第ここに入力フォームが追加されます。")
