@@ -24,7 +24,7 @@ if password != correct_password:
 # ==========================================
 
 # ▼新しいGASのURLを貼り付け！
-GAS_URL = "https://script.google.com/macros/s/AKfycbxD6CZSRwagL7NRbdWv6HcZN__14PZo7BgEgA3h0FTi3DLdR3MlbCfv8od-TfX8cO_8/exec"
+GAS_URL = "https://script.google.com/macros/s/AKfycbzvUNk534Grp0EJULYs6OPVrNDIQKIAg6OoxS9GMEo1lLjqVJAerB3A7Bj4VYb2BCo-/exec"
 
 st.title("進捗報告フォーム")
 
@@ -39,7 +39,7 @@ if selected_sheet == "Instagram_通常投稿":
     st.write(f"【{selected_sheet}】の進捗管理画面です。")
 
     # ==========================================
-    # 🌟 ここが抜けていた部分です！GASから表のデータ(all_data)を取得する
+    # 🌟 GASから表のデータ(all_data)を取得する
     # ==========================================
     all_data_key = f"all_data_{selected_sheet}"
     if all_data_key not in st.session_state:
@@ -71,7 +71,6 @@ if selected_sheet == "Instagram_通常投稿":
     # ==========================================
     options = ["未選択", "✨ 新規追加 (新しい通し番号を作成)"]
     for row in all_data:
-        # 例：「1: 夏祭りキャンペーン (いちか)」という分かりやすい選択肢を作る
         # ※もし担当者が空欄だった場合は「未記入」と表示する安全対策付き
         options.append(f"{row['id']}: {row['title']} ({row.get('name', '未記入')})")
         
@@ -203,8 +202,20 @@ elif selected_sheet == "Instagram_ストーリー":
     if len(all_data) > 0:
         st.subheader("📋 現在のストーリー一覧")
         df = pd.DataFrame(all_data)
-        # 💡 GASはC列を"title"、E列を"purpose"として送ってくるので、ここで綺麗にリネーム！
-        df = df.rename(columns={"id": "通し番号", "name": "担当者", "title": "投稿予定日", "purpose": "投稿完了"})
+        
+        # 💡 "date"（GASから送られてきたD列）を "投稿内容" にリネームします！
+        df = df.rename(columns={
+            "id": "通し番号", 
+            "name": "担当者", 
+            "title": "投稿予定日", 
+            "date": "投稿内容",    
+            "purpose": "投稿完了"
+        })
+        
+        # （※GASから来たデータにこれらの列がちゃんとある場合のみ並び替えます）
+        if "投稿内容" in df.columns:
+            df = df[["通し番号", "担当者", "投稿予定日", "投稿内容", "投稿完了"]]
+            
         st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.info("現在登録されているデータはありません。")
