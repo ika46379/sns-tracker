@@ -72,7 +72,7 @@ if selected_sheet == "Instagram_通常投稿":
     options = ["未選択", "✨ 新規追加 (新しい通し番号を作成)"]
     for row in all_data:
         # ※もし担当者が空欄だった場合は「未記入」と表示する安全対策付き
-        options.append(f"{row['id']}: {row['title']} ({row.get('name', '未記入')})")
+        options.append(f"{row['id']}: {row['date']} ({row.get('name', '未記入')})")
         
     selected_option = st.selectbox("どの投稿を編集・追加しますか？", options)
 
