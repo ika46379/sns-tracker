@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import json
 import datetime
-import pandas as pd  # 🌟 表を表示するために追加！
+import pandas as pd
 
 st.set_page_config(page_title="進捗報告フォーム", layout="centered")
 
@@ -24,7 +24,7 @@ if password != correct_password:
 # ==========================================
 
 # ▼新しいGASのURLを貼り付け！
-GAS_URL = "https://script.google.com/macros/s/AKfycbzvUNk534Grp0EJULYs6OPVrNDIQKIAg6OoxS9GMEo1lLjqVJAerB3A7Bj4VYb2BCo-/exec"
+GAS_URL = "https://script.google.com/macros/s/AKfycbz_9i7xKmgWxGKmOuxf7FLck67gUwVFfaYL4bBcM8r5MpFNPAL3RwllVBzRR-DRx9_g/exec"
 
 st.title("進捗報告フォーム")
 
@@ -115,6 +115,7 @@ if selected_sheet == "Instagram_通常投稿":
         selected_names = st.multiselect("担当者を選択 (B列)", members, default=default_names)
         name = "、".join(selected_names)
 
+        # C列: タイトル案
         title_input = st.text_input("タイトル案 (C列)", value=current_data.get("title", ""))
         
         # 📅 日付入力をカレンダーに！
@@ -127,17 +128,44 @@ if selected_sheet == "Instagram_通常投稿":
         post_date = st.date_input("投稿予定日 (D列)", value=parsed_date)
         post_date = str(post_date)
         
-        purpose_input = st.text_area("投稿目的 (E列)", value=current_data.get("purpose", ""))
+        # 🌟 投稿案を取得するコード
+        ideas_key = "all_ideas"
+        if ideas_key not in st.session_state:
+            with st.spinner('投稿案を読み込み中...'):
+                try:
+                    res_ideas = requests.get(GAS_URL, params={"action": "get_ideas"})
+                    data = res_ideas.json()
+                    st.session_state[ideas_key] = [] if isinstance(data, dict) else data
+                except:
+                    st.session_state[ideas_key] = []
+        
+        ideas_data = st.session_state[ideas_key]
+        if isinstance(ideas_data, dict):
+            ideas_data = []
+
+        idea_list = ["自由記述（リストから選ばない）"] + ideas_data
+        selected_idea = st.selectbox("💡 投稿案から選ぶ", idea_list)
+
+        if selected_idea == "自由記述（リストから選ばない）":
+            default_content = current_data.get("content", "") # 🌟 content に変更
+        else:
+            default_content = selected_idea
+
+        # E列: 投稿内容
+        content_input = st.text_area("投稿内容 (E列)", value=default_content)
+
+        # F列: 投稿目的
+        purpose_input = st.text_input("投稿目的 (F列)", value=current_data.get("purpose", ""))
         
         targets = ["未選択", "実行委員", "全世界"]
-        selected_target = st.radio("投稿対象者 (F列)", targets, index=get_default("target", targets, "未選択"))
+        selected_target = st.radio("投稿対象者 (G列)", targets, index=get_default("target", targets, "未選択"))
         
         st.write("---")
         st.subheader("2. 各タスクの進捗状況")
         
         tasks_keys = {
-            "デザイン案 (G列)": "design", "文章案 (H列)": "text", 
-            "デザイン依頼 (I列)": "designReq", "最終確認 (J列)": "check", "予約投稿 (K列)": "reserve"
+            "デザイン案 (H列)": "design", "文章案 (I列)": "text", 
+            "デザイン依頼 (J列)": "designReq", "最終確認 (K列)": "check", "予約投稿 (L列)": "reserve"
         }
         status_options = ["未対応", "対応中", "対応済"]
         status_dict = {}
@@ -152,10 +180,10 @@ if selected_sheet == "Instagram_通常投稿":
                 
         st.write("---")
         st.subheader("3. その他")
-        comment = st.text_area("コメント (M列)", value=current_data.get("comment", ""))
+        comment = st.text_area("コメント (N列)", value=current_data.get("comment", ""))
         
         progress_percent = int((completed_count / 5.0) * 100)
-        st.write(f"### ✨ 現在の進捗率 (L列)：{progress_percent}％")
+        st.write(f"### ✨ 現在の進捗率 (M列)：{progress_percent}％")
         st.progress(progress_percent / 100.0)
 
         if st.button("🚀 提出してスプレッドシートを更新！"):
@@ -164,11 +192,13 @@ if selected_sheet == "Instagram_通常投稿":
                     "sheet_name": selected_sheet, 
                     "id": "新規追加" if is_new else selected_id_option,
                     "name": name, "title": title_input, "date": post_date,
+                    "content": content_input,
                     "purpose": purpose_input, "target": selected_target,
-                    "design": status_dict["デザイン案 (G列)"], "text": status_dict["文章案 (H列)"],
-                    "designReq": status_dict["デザイン依頼 (I列)"], "check": status_dict["最終確認 (J列)"],
-                    "reserve": status_dict["予約投稿 (K列)"], "progress": f"{progress_percent}%",
-                    "comment": comment
+                    "design": status_dict["デザイン案 (H列)"], "text": status_dict["文章案 (I列)"],
+                    "designReq": status_dict["デザイン依頼 (J列)"], "check": status_dict["最終確認 (K列)"],
+                    "reserve": status_dict["予約投稿 (L列)"], "progress": f"{progress_percent}%",
+                    "comment": comment,
+                    "selected_idea": selected_idea
                 }
                 
                 requests.post(GAS_URL, data=json.dumps(payload))
@@ -362,7 +392,6 @@ elif selected_sheet == "note":
 
         st.subheader("1. 基本情報")
         # B列: 担当者
-        # B列: 担当者（履歴復元機能付き！）
         members = ["未定", "近藤衣千花", "山口悠己", "中田光優", "中西挑遥"]
         saved_names_str = current_data.get("name", "")
         saved_names_list = saved_names_str.split("、") if saved_names_str else []
